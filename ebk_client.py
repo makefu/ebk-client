@@ -34,6 +34,9 @@ import requests
 from datetime import datetime
 from dateutil.tz import tzlocal
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 try:
     from html import unescape  # python 3.4+
 except ImportError:
@@ -88,14 +91,14 @@ class EbkClient:
         elif r.status_code == 500:
             raise Exception('Internal Server Error (e.g. wrong request)')
 
-    def _http_get(self, url_suffix):
-        response = self._session.get( self.URL_PREFIX + url_suffix )
+    def _http_get(self, url_suffix,params=None):
+        if not params: params = {}
+        response = self._session.get( self.URL_PREFIX + url_suffix,params=params )
         self._validate_http_response(response)
         return response
 
     def _http_post(self, url_suffix, post_data = ''):
         response = self._session.post( self.URL_PREFIX + url_suffix, data=post_data, headers={'Content-Type': 'application/xml'} )
-        print(response.content)
         self._validate_http_response(response)
         return response
 
@@ -109,6 +112,20 @@ class EbkClient:
         self._validate_http_response(response)
         return response
 
+
+    def get_ads(self,**params):
+        # latitude=12.42&longitude=-34.44&distance=50&distanceUnit=KM
+        # locationId=12,13
+        # zipcode=70435
+        #
+        # usage:
+        #   api.get_ads(zipcode="70435",categoryId=80,distance=2,distanceUnit="KM")
+        if not params: params = {}
+        url = "/ads.json"
+        response_json = self._http_get(url,params).json()
+        ads = response_json.get('{http://www.ebayclassifiedsgroup.com/schema/ad/v1}ads', {}).get('value', {}).get('ad', None)
+        return ads
+
     def get_my_ads(self):
         url = "/users/{}/ads.json?_in=id,title,start-date-time,ad-status".format(self.username)
         response = self._http_get(url)
@@ -116,6 +133,11 @@ class EbkClient:
         my_ads = response_json.get('{http://www.ebayclassifiedsgroup.com/schema/ad/v1}ads', {}).get('value', {}).get('ad', None)
 
         return my_ads
+
+    def get_ad_details(self,ident):
+        url = "/ads/{}.json".format(ident)
+        response = self._http_get(url).json()
+        return response.get('{http://www.ebayclassifiedsgroup.com/schema/ad/v1}ad', {}).get('value', {})
 
     def change_ad_status(self, ad_id, status):
         if status not in ['active', 'paused']:
@@ -201,5 +223,5 @@ class EbkClient:
         return locations
 
     def html_unescape(self, data):
-        return unescape(data)
+        return unescape(data.decode())
 
